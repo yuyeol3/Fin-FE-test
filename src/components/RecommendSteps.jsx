@@ -316,15 +316,16 @@ export function StepHouseholdIncome({ data, setData, cats, onPrev, onNext }) {
 
             <div className="flex flex-col gap-[10px] mb-[14px] w-full max-w-[570px]">
               {cats.incomeLevel.map((item) => {
-                const isSelected = data.incomeLevel === item.label;
+                // 표시 문자열이 아니라 백엔드가 받는 퍼센트 값을 그대로 보관한다.
+                const isSelected = data.householdIncomePercent === item.percent;
                 return (
-                  <label key={item.label}
+                  <label key={item.percent}
                     className={`flex h-[54px] items-center gap-[10px] px-[25px] rounded-full border-2 cursor-pointer transition-all ${
                       isSelected ? "border-[#03BFA5] bg-[#03BFA5] text-white" : "border-[#E0DFDF] bg-white hover:border-[#03BFA5]"
                     }`}
                   >
                     <input type="checkbox" className="hidden" checked={isSelected}
-                      onChange={() => setData({ ...data, incomeLevel: isSelected ? "" : item.label })} />
+                      onChange={() => setData({ ...data, householdIncomePercent: isSelected ? null : item.percent })} />
                     
                     <div className={`w-5 h-5 rounded-[2px] flex items-center justify-center transition-all ${
                       isSelected ? "bg-white" : "border border-[#454545] bg-white"
@@ -354,7 +355,7 @@ export function StepHouseholdIncome({ data, setData, cats, onPrev, onNext }) {
             </InfoBox>
           </div>
         </div>
-        <NavButtons onPrev={onPrev} onNext={onNext} isLast={false} disabled={!data.incomeLevel}/>
+        <NavButtons onPrev={onPrev} onNext={onNext} isLast={false} disabled={data.householdIncomePercent == null}/>
       </StepLayout>
   );
 }
@@ -514,12 +515,14 @@ const TABS = [
   { id: '지방', label: '지방', icon: 'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z' }
 ];
 
+// 거주지역 optionValue -> 해당 지역 은행 코드.
+// 예전에는 "reg_05" 같은 임의 키를 썼는데 실제로 넘어오는 값은 optionId(숫자)라 매칭이 항상 실패했다.
 const REGION_BANK_MAP = {
-  "reg_05": "BNK부산",
-  "reg_06": "BNK경남은행",
-  "reg_07": "광주은행",
-  "reg_08": "전북은행",
-  "reg_09": "제주은행"
+  "부산": "0010017",
+  "경남": "0010024",
+  "광주": "0010019",
+  "전북": "0010022",
+  "제주": "0010020",
 };
 
 export function BankSelector({
@@ -540,11 +543,18 @@ export function BankSelector({
   };
   const themeColor = colors[theme];
   const categoriesToUse = cats?.bankCategories || [];
+  // 선택 값은 은행 코드이므로 표시할 때만 이름으로 바꾼다.
+  const bankName = (code) => cats?.bankNameByCode?.[code] ?? code;
+
+  // userRegion은 거주지역 optionId라서 optionValue로 되돌려야 지역은행을 찾을 수 있다.
+  const regionValue = cats?.regions?.find(
+    (option) => String(option.optionId) === String(userRegion),
+  )?.optionValue;
 
   const displayedCategories = categoriesToUse.map(category => {
     if (category.id === '지방') {
       if (activeTab === '전체') {
-        const myLocalBank = REGION_BANK_MAP[userRegion];
+        const myLocalBank = REGION_BANK_MAP[regionValue];
         return { ...category, banks: category.banks.filter(b => b === myLocalBank) };
       }
       return category;
@@ -636,7 +646,7 @@ export function BankSelector({
                   <button key={bank} disabled={isDisabled} onClick={() => toggleBank(bank)}
                     className={`h-[56px] rounded-[10px] border-2 px-[10px] py-3 text-[22px] font-medium font-inter flex items-center justify-center transition-all ${btnStyle}`}
                     style={{ backgroundColor: isSelected && !isDisabled ? themeColor.bg : undefined }}
-                  >{bank}</button>
+                  >{bankName(bank)}</button>
                 );
               })}
             </div>
@@ -658,7 +668,7 @@ export function BankSelector({
           <div className="flex gap-2 flex-wrap">
             {selectedBanks.map(bank => (
               <span key={bank} className={`flex items-center gap-1 px-4 py-2 rounded-full border text-[17px] bg-[#F4FEFD] ${themeColor.border} ${themeColor.text} font-semibold shadow-sm`}>
-                {bank}
+                {bankName(bank)}
                 <button onClick={() => toggleBank(bank)} className="ml-1.5 hover:opacity-70 font-bold">×</button>
               </span>
             ))}

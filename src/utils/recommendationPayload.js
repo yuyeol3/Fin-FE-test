@@ -1,51 +1,54 @@
-const CATEGORY_ALIASES = {
-  regions: ["거주지역"],
-  status: ["현재신분"],
-  savingPeriod: ["저축기간"],
-  benefits: ["혜택선택", "핵심혜택"],
-  bankRelation: ["우대거래", "은행거래"],
+// 백엔드 CategoryIdEnum과 1:1로 대응한다.
+// 카테고리 이름은 DB 텍스트라 언제든 바뀔 수 있어서 id로 매칭한다.
+export const CATEGORY_ID = {
+  regions: 1,
+  status: 2,
+  savingPeriod: 3,
+  benefits: 4,
+  interests: 5,
+  bankRelation: 6,
 };
 
 const HIDDEN_BANK_RELATION_OPTIONS = new Set(["첫거래고객", "재예치"]);
 
-const BANK_CODE_BY_LABEL = {
-  KB국민: "0010927",
-  KB국민은행: "0010927",
-  신한: "0011625",
-  신한은행: "0011625",
-  하나: "0013909",
-  하나은행: "0013909",
-  우리: "0010001",
-  우리은행: "0010001",
-  SC제일: "0010002",
-  SC제일은행: "0010002",
-  iM뱅크: "0010016",
-  카카오뱅크: "0015130",
-  토스뱅크: "0017801",
-  케이뱅크: "0014674",
-  NH농협: "0013175",
-  NH농협은행: "0013175",
-  Sh수협: "0014807",
-  Sh수협은행: "0014807",
-  IBK기업: "0010026",
-  IBK기업은행: "0010026",
-  BNK부산: "0010017",
-  부산은행: "0010017",
-  광주은행: "0010019",
-  제주은행: "0010020",
-  전북은행: "0010022",
-  BNK경남은행: "0010024",
-  경남은행: "0010024",
-};
+// 은행 그룹 표시 순서. GET /providers/banks의 category 값(시중/인터넷/특수/지방/기타)과 같다.
+const BANK_CATEGORY_ORDER = ["시중", "인터넷", "특수", "지방"];
 
 function normalizeCategoryName(value = "") {
   return value.replace(/[\s·_()-]/g, "").toLowerCase();
 }
 
-function findCategory(categories, aliases) {
-  const normalizedAliases = aliases.map(normalizeCategoryName);
-  return categories.find((category) =>
-    normalizedAliases.includes(normalizeCategoryName(category?.categoryName)),
+export function findCategoryById(categories, categoryId) {
+  return categories?.find((category) => Number(category?.categoryId) === categoryId);
+}
+
+// GET /providers/banks 응답을 BankSelector가 쓰는 그룹 구조로 바꾼다.
+// banks는 코드 배열로 두고 표시 이름은 bankNameByCode로 따로 넘긴다.
+// (백엔드 프로필 API가 은행 코드를 주고받으므로 선택 값 자체를 코드로 유지한다.)
+export function buildBankCategories(banks = []) {
+  const byCategory = new Map();
+  banks.forEach((bank) => {
+    if (!bank?.code) return;
+    const category = bank.category || "기타";
+    if (!byCategory.has(category)) byCategory.set(category, []);
+    byCategory.get(category).push(bank.code);
+  });
+
+  const orderedNames = [
+    ...BANK_CATEGORY_ORDER.filter((name) => byCategory.has(name)),
+    ...[...byCategory.keys()].filter((name) => !BANK_CATEGORY_ORDER.includes(name)),
+  ];
+
+  return orderedNames.map((name) => ({
+    id: name,
+    title: `${name}은행`,
+    banks: byCategory.get(name),
+  }));
+}
+
+export function buildBankNameByCode(banks = []) {
+  return Object.fromEntries(
+    banks.filter((bank) => bank?.code).map((bank) => [bank.code, bank.name]),
   );
 }
 
@@ -57,9 +60,9 @@ export function mapRecommendCategories(payload, extras = {}) {
       : [];
 
   const matched = Object.fromEntries(
-    Object.entries(CATEGORY_ALIASES).map(([key, aliases]) => [
+    Object.entries(CATEGORY_ID).map(([key, categoryId]) => [
       key,
-      findCategory(categories, aliases),
+      findCategoryById(categories, categoryId),
     ]),
   );
 
@@ -98,15 +101,6 @@ function toBirthdate(data) {
   return `${data.birthYear}-${month}-${day}`;
 }
 
-function toHouseholdIncomePercent(value) {
-  const match = String(value || "").match(/(\d+)\s*%/);
-  return match ? Number(match[1]) : null;
-}
-
-function toBankCodes(values = []) {
-  return values.map((value) => BANK_CODE_BY_LABEL[value] || value);
-}
-
 function selectedOptions(data, categoryIds) {
   const fields = [
     ["regions", data.region ? [data.region] : []],
@@ -140,7 +134,7 @@ export function buildRecommendationRequest(data, categories) {
       birthdate: toBirthdate(data),
       annualIncome: toWonFromTenThousand(data.income),
       householdSize: toNumber(data.householdCount) ?? 1,
-      householdIncomePercent: toHouseholdIncomePercent(data.incomeLevel),
+      householdIncomePercent: toNumber(data.householdIncomePercent),
       tenureMonths: employmentMonths && employmentMonths > 0 ? employmentMonths : null,
       isFirstJob: data.isFirstJob ? true : null,
       isHomeless:
@@ -152,8 +146,9 @@ export function buildRecommendationRequest(data, categories) {
       isHouseholder: data.isTenant ? true : null,
       monthlySavingsGoal: toWonFromTenThousand(data.monthlyAmount),
       mainBanks: [],
-      neverUsedBanks: toBankCodes(data.firstBanks || []),
-      maturedSavingBanks: toBankCodes(data.maturedBanks || []),
+      // 선택 값이 이미 은행 코드다(GET /providers/banks의 code).
+      neverUsedBanks: data.firstBanks || [],
+      maturedSavingBanks: data.maturedBanks || [],
       selectedInterestRateOptions: [],
     },
   };

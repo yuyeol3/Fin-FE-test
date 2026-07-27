@@ -1,46 +1,46 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
+import client from "../api/client";
 import {
+  fetchBankProviders,
+  fetchDynamicForm,
+  fetchProductDetail,
+  searchProducts,
+} from "../api/products";
+import {
+  buildBankCategories,
+  buildBankNameByCode,
   buildRecommendationRequest,
   mapRecommendCategories,
 } from "../utils/recommendationPayload";
 import { persistRecommendation } from "../utils/recommendationResult";
+import { MOCK_BANK_PROVIDERS } from "../data/mypage";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
-  || "https://test-fin.duckdns.org";
+// 상세 조회는 상품 수만큼 POST가 나가므로 상위 랭킹만 미리 채운다.
+const DETAIL_PREFETCH_LIMIT = 30;
 
-async function fetchGovernmentDetails(result, request, accessToken) {
-  const matches = Array.isArray(result?.governmentRanked)
-    ? result.governmentRanked.filter((match) => match?.productId)
-    : [];
+// 적합도 상위 상품의 상세를 미리 받아 카드에 필요한 지표/키워드를 채운다.
+// 정부 상품만 받던 예전 동작 때문에 은행 상세가 전부 버려지고 있었다.
+async function fetchProductDetails(result, request) {
+  const matches = [
+    ...(Array.isArray(result?.governmentRanked) ? result.governmentRanked : []),
+    ...(Array.isArray(result?.bankRanked) ? result.bankRanked : []),
+  ].filter((match) => match?.productId);
+
   const uniqueMatches = [
     ...new Map(
       matches.map((match) => [`${match.productId}:${match.productPropertyId}`, match]),
     ).values(),
-  ];
+  ].slice(0, DETAIL_PREFETCH_LIMIT);
 
   const detailResults = await Promise.allSettled(
-    uniqueMatches.map(async (match) => {
-      const response = await fetch(
-        `${API_BASE_URL}/search/products/${match.productId}/detail`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({
-            productPropertyId: match.productPropertyId ?? null,
-            options: request.options,
-            detailedOptions: request.detailedOptions,
-          }),
-        },
-      );
-
-      if (!response.ok) return null;
-      const detail = await response.json();
-      return detail?.government ? detail : null;
-    }),
+    uniqueMatches.map((match) =>
+      fetchProductDetail(match.productId, {
+        productPropertyId: match.productPropertyId ?? null,
+        options: request.options,
+        detailedOptions: request.detailedOptions,
+      }),
+    ),
   );
 
   return detailResults.flatMap((detailResult) =>
@@ -50,21 +50,29 @@ async function fetchGovernmentDetails(result, request, accessToken) {
   );
 }
 
-const BANK_CATEGORIES = [
-  { id: '시중', title: '시중은행', banks: ['KB국민', '신한', '하나', '우리', 'SC제일', 'iM뱅크'] },
-  { id: '인터넷', title: '인터넷은행', banks: ['카카오뱅크', '토스뱅크', '케이뱅크'] },
-  { id: '특수', title: '특수은행', banks: ['NH농협', 'Sh수협', 'IBK기업'] },
-  { id: '지방', title: '지방은행', banks: ['BNK부산', '광주은행', '제주은행', '전북은행', 'BNK경남은행'] },
+// 백엔드가 중위소득을 주기 전에 쓰는 기본값(가구원 1인 기준).
+const FALLBACK_INCOME_LEVELS = [
+  { percent: 60, label: "중위소득 60%", amount: "월 154만원 이하" },
+  { percent: 80, label: "중위소득 80%", amount: "월 205만원 이하" },
+  { percent: 100, label: "중위소득 100%", amount: "월 256만원 이하" },
+  { percent: 120, label: "중위소득 120%", amount: "월 308만원 이하" },
+  { percent: 150, label: "중위소득 150%", amount: "월 385만원 이하" },
+  { percent: 180, label: "중위소득 180%", amount: "" },
 ];
 
-const INCOME_LEVELS = [
-  { label: "중위소득 60%", amount: "월 154만원 이하" },
-  { label: "중위소득 80%", amount: "월 205만원 이하" },
-  { label: "중위소득 100%", amount: "월 256만원 이하" },
-  { label: "중위소득 120%", amount: "월 308만원 이하" },
-  { label: "중위소득 150%", amount: "월 385만원 이하" },
-  { label: "중위소득 180%", amount: "" },
-];
+// medianIncomes의 금액 단위는 만원이다. 시드가 없는 가구원 수는 0이 내려오므로 금액을 비운다.
+function buildIncomeLevels(medianIncomes) {
+  if (!medianIncomes) return FALLBACK_INCOME_LEVELS;
+
+  return [60, 80, 100, 120, 150, 180].map((percent) => {
+    const amount = medianIncomes[`p${percent}`];
+    return {
+      percent,
+      label: `중위소득 ${percent}%`,
+      amount: amount > 0 ? `월 ${amount}만원 이하` : "",
+    };
+  });
+}
 
 const MOCK_CATEGORIES = {
   regions: [
@@ -94,8 +102,9 @@ const MOCK_CATEGORIES = {
     { optionId: "mock_salary", optionValue: "급여 이체" },
   ],
   categoryIds: {},
-  bankCategories: BANK_CATEGORIES,
-  incomeLevel: INCOME_LEVELS,
+  bankCategories: buildBankCategories(MOCK_BANK_PROVIDERS),
+  bankNameByCode: buildBankNameByCode(MOCK_BANK_PROVIDERS),
+  incomeLevel: FALLBACK_INCOME_LEVELS,
 };
 
 function isMockRecommendMode() {
@@ -110,6 +119,7 @@ export default function useRecommendForm() {
   const [cats, setCats] = useState(null);
   const [loading, setLoading] = useState(true);
   const mockMode = isMockRecommendMode();
+  const householdCount = formData.householdCount || 1;
 
   useEffect(() => {
     if (mockMode) {
@@ -118,30 +128,58 @@ export default function useRecommendForm() {
       return;
     }
 
-    if (!accessToken) return; // 토큰 없으면 대기... 인데 백엔드에서 수정 시 바꿈
-    const fetchCategories = async () => {
+    // /api/categories 와 /providers/banks 는 인증이 필요하다.
+    if (!accessToken) return;
+
+    let cancelled = false;
+
+    const loadFormOptions = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/categories`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
+        const [categoriesRes, banks] = await Promise.all([
+          client.get("/api/categories"),
+          fetchBankProviders(),
+        ]);
+        if (cancelled) return;
 
-        if (!res.ok) throw new Error("카테고리 요청 실패");
-
-        const data = await res.json();
-
-        setCats(mapRecommendCategories(data, {
-          bankCategories: BANK_CATEGORIES,
-          incomeLevel: INCOME_LEVELS,
+        setCats(mapRecommendCategories(categoriesRes.data, {
+          bankCategories: buildBankCategories(banks),
+          bankNameByCode: buildBankNameByCode(banks),
+          incomeLevel: FALLBACK_INCOME_LEVELS,
         }));
       } catch (e) {
-        console.error("카테고리 불러오기 실패:", e);
+        console.error("추천 폼 옵션을 불러오지 못했습니다:", e);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
-    fetchCategories();
+    loadFormOptions();
+
+    return () => {
+      cancelled = true;
+    };
   }, [accessToken, mockMode]);
+
+  // 중위소득 기준은 가구원 수에 따라 달라지므로 값이 바뀔 때마다 다시 받아온다.
+  useEffect(() => {
+    if (mockMode || !cats) return;
+
+    let cancelled = false;
+
+    fetchDynamicForm(householdCount)
+      .then((dynamicForm) => {
+        if (cancelled) return;
+        const incomeLevel = buildIncomeLevels(dynamicForm?.medianIncomes);
+        setCats((prev) => (prev ? { ...prev, incomeLevel } : prev));
+      })
+      .catch((e) => console.error("중위소득 기준을 불러오지 못했습니다:", e));
+
+    return () => {
+      cancelled = true;
+    };
+    // cats 전체를 의존성에 넣으면 setCats가 다시 이 effect를 깨우므로 존재 여부만 본다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [householdCount, mockMode, Boolean(cats)]);
 
   const handleSubmit = async () => {
     const request = buildRecommendationRequest(formData, cats);
@@ -150,35 +188,26 @@ export default function useRecommendForm() {
       return { request, result: null };
     }
 
-    const res = await fetch(`${API_BASE_URL}/search/products`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify(request),
-    });
-
-    if (!res.ok) {
-      const errorBody = await res.json().catch(() => null);
-      throw new Error(errorBody?.message || errorBody?.error || "상품 분석에 실패했습니다.");
+    let result;
+    try {
+      result = await searchProducts(request);
+    } catch (error) {
+      throw new Error(error.response?.data?.message || "상품 분석에 실패했습니다.");
     }
 
-    const result = await res.json();
-    const governmentDetails = await fetchGovernmentDetails(
-      result,
-      request,
-      accessToken,
-    );
+    const productDetails = await fetchProductDetails(result, request);
     const recommendation = {
       request,
       result: {
         ...result,
-        governmentDetails,
+        productDetails,
+        // 정부 상세만 쓰던 기존 화면 호환용
+        governmentDetails: productDetails.filter((detail) => detail?.government),
       },
     };
 
-    persistRecommendation({ result: recommendation.result });
+    // request가 없으면 상세/계산기에서 같은 조건으로 재조회할 수 없다.
+    persistRecommendation(recommendation);
     return recommendation;
   };
 

@@ -1,4 +1,4 @@
-import axios from 'axios'
+import { logout } from '../api/client'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import logo from '../assets/logo.png'
@@ -60,7 +60,7 @@ function UserButtons() {
 
   const handleLogout = async () => {
     try {
-      await axios.post('https://test-fin.duckdns.org/auth/logout', {}, { withCredentials: true })
+      await logout()
     } catch (e) {
       console.error(e)
     } finally {
