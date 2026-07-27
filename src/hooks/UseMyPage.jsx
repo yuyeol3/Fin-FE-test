@@ -4,6 +4,7 @@ import client from "../api/client";
 import { fetchBankProviders } from "../api/products";
 import { fetchFavorites, removeFavorite as removeFavoriteRequest } from "../api/favorites";
 import { CATEGORY_ID, findCategoryById } from "../utils/recommendationPayload";
+import { readPersistedRecommendation } from "../utils/recommendationResult";
 import {
   MOCK_PROFILE,
   MOCK_OPTION_CATEGORIES,
@@ -152,7 +153,7 @@ export default function useMyPage() {
         const [profileRes, categoriesRes, favoritesData, bankProviders] = await Promise.all([
           client.get("/user/me/profile"),
           client.get("/api/categories"),
-          fetchFavorites(),
+          fetchFavorites(readPersistedRecommendation()?.request ?? null),
           fetchBankProviders(),
         ]);
         if (cancelled) return;

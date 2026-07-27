@@ -1,5 +1,7 @@
 import { useNavigate, useParams } from "react-router-dom";
-import { findProductById, PRODUCTS } from "../data/products";
+import useProductDetail from "../hooks/UseProductDetail";
+import useFavorites from "../hooks/UseFavorites";
+import { RATE_NOTICE, SUBSCRIPTION_METRICS_NOTICE } from "../data/productCopy";
 import { getProductApplicationBadge, getProductApplicationBadgeVariant, openProductApplication } from "../utils/productApplyLink";
 
 function ArrowLeftIcon({ className = "" }) {
@@ -150,11 +152,22 @@ function RateTable({ product }) {
         <span className="text-center">기본금리</span>
         <span className="text-right">최고금리</span>
       </div>
-      <div className="grid h-[50px] grid-cols-3 items-center border border-[#03BFA5] px-[22px] text-[#454545]">
-        <span>{product.rateTerm}</span>
-        <span className="text-center">{product.baseRateDisplay}</span>
-        <span className="text-right">{product.maxRateDisplay}</span>
-      </div>
+      {(product.rateRows ?? []).length === 0 ? (
+        <div className="flex h-[50px] items-center justify-center border border-[#03BFA5] px-[22px] text-[#7A7A7A]">
+          공시된 금리 정보가 없어요.
+        </div>
+      ) : (
+        product.rateRows.map((row, index) => (
+          <div
+            key={`${row.term}-${row.baseRate}-${index}`}
+            className="grid h-[50px] grid-cols-3 items-center border border-t-0 border-[#03BFA5] px-[22px] text-[#454545] first:border-t"
+          >
+            <span>{row.term}</span>
+            <span className="text-center">{row.baseRate}</span>
+            <span className="text-right">{row.maxRate}</span>
+          </div>
+        ))
+      )}
     </div>
   );
 }
@@ -209,9 +222,15 @@ function RateInfoCard({ product }) {
         <div className="flex flex-col gap-[20px] lg:w-[710px]">
           <SectionTitle icon={<StarIcon className="size-[26px] text-[#03BFA5]" />}>우대금리 조건</SectionTitle>
           <div className="flex flex-col gap-[7px] lg:w-[736px]">
-            {product.rateConditions.map((item) => (
-              <RateConditionRow key={`${item.label}-${item.value}`} item={item} />
-            ))}
+            {product.rateConditions.length === 0 ? (
+              <p className="text-[20px] font-normal text-[#7A7A7A]">
+                {product.metricsLocked ? product.lockMessage : "적용 가능한 우대금리 조건이 없어요."}
+              </p>
+            ) : (
+              product.rateConditions.map((item) => (
+                <RateConditionRow key={`${item.label}-${item.value}`} item={item} />
+              ))
+            )}
           </div>
         </div>
       </div>
@@ -231,8 +250,10 @@ function NoticeBox({ children }) {
 }
 
 function BankRateSummary({ product }) {
-  const baseRate = product.baseRateDisplay || `${product.baseRate}%`;
-  const maxRate = product.maxRateDisplay || `${product.maxRate}%`;
+  const baseRate = product.baseRate == null ? "-" : `${product.baseRate}%`;
+  const maxRate = product.maxRate == null ? "-" : `${product.maxRate}%`;
+  // 비로그인이면 metricsLocked가 켜져 개인화 금리를 계산하지 않는다.
+  const myRate = product.metricsLocked || product.myRate == null ? "연 ??? %" : `연 ${product.myRate}%`;
 
   return (
     <div className="flex h-[303px] flex-col items-center justify-center rounded-[10px] border border-[#D5D5D5] px-6 py-8 lg:w-[699px] lg:px-[37px] lg:py-[48px]">
@@ -249,7 +270,7 @@ function BankRateSummary({ product }) {
       </div>
       <div className="mt-[16px] flex h-[44px] w-full max-w-[461px] items-center justify-center gap-[22px] rounded-full border border-[#03BFA5] bg-[#EFFFFD] px-[26px] leading-[1.2] text-[#03BFA5]">
         <span className="whitespace-nowrap text-center text-[21.93px] font-normal">내가 달성 가능한 금리</span>
-        <span className="whitespace-nowrap text-center text-[24.37px] font-semibold">연 ??? %</span>
+        <span className="whitespace-nowrap text-center text-[24.37px] font-semibold">{myRate}</span>
       </div>
     </div>
   );
@@ -261,15 +282,21 @@ function ContributionSummary({ product }) {
       <div className="grid w-full grid-cols-1 items-center justify-items-center gap-7 md:grid-cols-[1fr_1px_1fr] md:gap-0">
         <div className="w-fit max-w-full text-left">
           <p className="whitespace-nowrap text-[24.7px] font-medium leading-[1.2] text-[#454545]">기여금 환산 수익률</p>
-          <p className="mt-[11px] whitespace-nowrap text-[49.4px] font-bold leading-[1.2] text-[#454545]">{product.contributionRate}</p>
+          <p className="mt-[11px] whitespace-nowrap text-[49.4px] font-bold leading-[1.2] text-[#454545]">{product.contributionRate ?? "—"}</p>
         </div>
         <div className="hidden h-[108px] w-px bg-[#D5D5D5] md:block" />
         <div className="w-fit max-w-full text-left">
           <p className="whitespace-nowrap text-[24.7px] font-medium leading-[1.2] text-[#454545]">예상 만기 기여금 총액</p>
-          <p className="mt-[11px] whitespace-nowrap text-[49.4px] font-bold leading-[1.2] text-[#03BFA5]">{product.maturityContribution}</p>
+          <p className="mt-[11px] whitespace-nowrap text-[49.4px] font-bold leading-[1.2] text-[#03BFA5]">{product.maturityContribution ?? "—"}</p>
         </div>
       </div>
-      <p className="mt-[22px] w-full text-center text-[23.1px] font-medium leading-[1.2] text-[#606060]">{product.contributionCaption}</p>
+      <p className="mt-[22px] w-full text-center text-[23.1px] font-medium leading-[1.2] text-[#606060]">
+        {product.metricsLocked
+          ? product.lockMessage
+          : product.isSubscription
+            ? SUBSCRIPTION_METRICS_NOTICE
+            : product.contributionCaption}
+      </p>
     </div>
   );
 }
@@ -278,9 +305,12 @@ function ProductSummary({ product, isBankProduct }) {
   return isBankProduct ? <BankRateSummary product={product} /> : <ContributionSummary product={product} />;
 }
 
-function RightPanel({ product, onEditRate }) {
+function RightPanel({ product, onEditRate, isFavorite, onToggleFavorite }) {
   const applicationBadgeVariant = getProductApplicationBadgeVariant(product);
   const isBankProduct = applicationBadgeVariant === "bank";
+  // applyUrl이 null이면 공식 신청 페이지가 없다는 뜻이라 CTA를 비활성화한다.
+  const canApply = Boolean(product.applyUrl);
+  const canFavorite = product.productPropertyId != null;
   const applicationBadgeClass = applicationBadgeVariant === "bank"
     ? "bg-[#F4F5F6] text-[#454545]"
     : "bg-[#F7FFFE] text-[#03BFA5]";
@@ -293,17 +323,36 @@ function RightPanel({ product, onEditRate }) {
         <div className="grid grid-cols-[1fr_82px] gap-[10px]">
           <button
             type="button"
+            disabled={!canApply}
+            title={canApply ? undefined : "공식 신청 페이지가 준비되지 않았어요."}
             onClick={() => openProductApplication(product)}
-            className="flex h-[80px] items-center justify-center gap-[20px] rounded-[10px] border border-[#03BFA5] bg-[#03BFA5] text-[30px] font-medium leading-[1.2] text-white transition-colors hover:bg-[#02A892]"
+            className={`flex h-[80px] items-center justify-center gap-[20px] rounded-[10px] border text-[30px] font-medium leading-[1.2] transition-colors ${
+              canApply
+                ? "border-[#03BFA5] bg-[#03BFA5] text-white hover:bg-[#02A892]"
+                : "cursor-not-allowed border-[#E0E0E0] bg-[#F5F5F5] text-[#B0B0B0]"
+            }`}
           >
             <ExternalLinkIcon className="size-[30px]" />
-            신청하러 가기
+            {canApply ? "신청하러 가기" : "신청 링크 없음"}
           </button>
-          <button className="flex h-[80px] items-center justify-center rounded-[10px] border-2 border-[#D4D4D4] text-[#D4D4D4] transition-colors hover:border-[#03BFA5] hover:text-[#03BFA5]" aria-label="관심 상품">
+          <button
+            type="button"
+            aria-label="관심 상품"
+            aria-pressed={Boolean(isFavorite)}
+            disabled={!canFavorite}
+            onClick={onToggleFavorite}
+            className={`flex h-[80px] items-center justify-center rounded-[10px] border-2 transition-colors ${
+              !canFavorite
+                ? "cursor-not-allowed border-[#E0E0E0] text-[#E0E0E0]"
+                : isFavorite
+                  ? "border-[#03BFA5] text-[#03BFA5]"
+                  : "border-[#D4D4D4] text-[#D4D4D4] hover:border-[#03BFA5] hover:text-[#03BFA5]"
+            }`}
+          >
             <HeartIcon className="size-[40px]" />
           </button>
         </div>
-        {isBankProduct && product.calculator && (
+        {isBankProduct && product.bank && (
           <button
             type="button"
             onClick={onEditRate}
@@ -343,7 +392,7 @@ function ProductHeader({ product }) {
   return (
     <div className="flex flex-col gap-[30px]">
       <div className="flex flex-wrap gap-[9px]">
-        {product.tags.map((tag) => (
+        {(product.tags ?? []).map((tag) => (
           <DetailBadge key={tag} label={tag} />
         ))}
       </div>
@@ -394,7 +443,7 @@ function LeftPanel({ product, onBack }) {
             <SectionTitle icon={<span className="text-[26px] font-semibold leading-none text-[#03BFA5]">%</span>}>금리 안내</SectionTitle>
             <RateInfoCard product={product} />
           </div>
-          <NoticeBox>{product.rateNotice}</NoticeBox>
+          <NoticeBox>{RATE_NOTICE}</NoticeBox>
         </section>
       </div>
     </div>
@@ -404,14 +453,45 @@ function LeftPanel({ product, onBack }) {
 export default function ProductDetail() {
   const { productId } = useParams();
   const navigate = useNavigate();
-  const product = findProductById(productId) || PRODUCTS[0];
+  const { product, loading, error } = useProductDetail(productId);
+  const { isFavorite, toggleFavorite } = useFavorites();
+
+  if (loading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-white font-inter text-[20px] text-[#8A8A8A]">
+        상품 정보를 불러오는 중이에요...
+      </main>
+    );
+  }
+
+  if (error || !product) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-white font-inter">
+        <p className="text-[20px] text-[#606060]">상품 정보를 불러오지 못했어요.</p>
+        <button
+          type="button"
+          onClick={() => navigate("/products")}
+          className="rounded-lg border border-[#03BFA5] px-5 py-2 text-[16px] text-[#03BFA5] hover:bg-[#F7FFFE]"
+        >
+          상품 리스트로 돌아가기
+        </button>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-white font-inter text-[#454545]">
       <div className="mx-auto mt-[13px] w-full max-w-[1670px] rounded-[3px] border border-[#D5D5D5] px-6 pb-[70px] pt-[46px] lg:px-[61px]">
         <div className="mx-auto grid w-full max-w-[1548px] gap-[33px] xl:grid-cols-[816px_699px]">
           <LeftPanel product={product} onBack={() => navigate("/products")} />
-          <RightPanel product={product} onEditRate={() => navigate(`/products/${product.id}/calculator`)} />
+          <RightPanel
+            product={product}
+            isFavorite={isFavorite(product.productPropertyId)}
+            onToggleFavorite={() => toggleFavorite(product.productPropertyId)}
+            onEditRate={() => navigate(`/products/${product.id}/calculator`, {
+              state: { productPropertyId: product.productPropertyId },
+            })}
+          />
         </div>
       </div>
     </main>

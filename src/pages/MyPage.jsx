@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import useMyPage, { splitTrailingParen } from "../hooks/UseMyPage";
 import EditFieldModal from "../components/MyPageEditModals";
+import { keywordTagLabel } from "../utils/productViewModel";
 import heartIcon from "../assets/green_heart.png";
 
 function ChevronDownIcon({ className = "" }) {
@@ -63,6 +64,10 @@ function Tabs({ active, onChange, likedCount }) {
 
 /* ---------- 찜해둔 Fin. 탭 ---------- */
 
+function isValidFitScore(score) {
+  return typeof score === "number" && Number.isFinite(score) && score >= 0 && score <= 100;
+}
+
 function mapFavoriteItem(item) {
   const isContribution = Boolean(item.excludeFromRateComparison);
   const metrics = item.metrics || {};
@@ -71,7 +76,12 @@ function mapFavoriteItem(item) {
     id: item.productPropertyId,
     title: item.productName,
     subtitle: item.summaryLine,
-    tags: [`적합도 ${item.fitScore}%`, ...(item.keywords || [])],
+    // 키워드는 KeywordValueEnum 이름으로 내려오므로 한글 라벨로 바꾼다.
+    // fitScore는 서버가 0~100 범위를 벗어난 값을 주는 경우가 있어 정상 범위일 때만 노출한다.
+    tags: [
+      ...(isValidFitScore(item.fitScore) ? [`적합도 ${Math.round(item.fitScore)}%`] : []),
+      ...(item.keywords || []).map(keywordTagLabel),
+    ],
     isContribution,
     contributionRate:
       isContribution && metrics.contributionYieldRate != null ? `연 ${metrics.contributionYieldRate.toFixed(1)}%` : null,
