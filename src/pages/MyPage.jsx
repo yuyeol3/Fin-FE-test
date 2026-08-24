@@ -1,8 +1,11 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import useMyPage, { splitTrailingParen } from "../hooks/UseMyPage";
 import EditFieldModal from "../components/MyPageEditModals";
 import heartIcon from "../assets/green_heart.png";
+import { useAuth } from "../context/AuthContext";
+import { buildRecommendationRequestFromProfile } from "../utils/recommendationPayload";
+import { runProductSearch } from "../utils/productSearch";
 
 function ChevronDownIcon({ className = "" }) {
   return (
@@ -228,7 +231,7 @@ function LikedProductsCarousel({ products, onRemove }) {
           onClick={() => goToPage(currentPage - 1)}
           disabled={currentPage === 0}
           aria-label="이전 상품"
-          className="absolute -left-22 top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center rounded-full border border-[#D5D5D5] bg-white pb-0.5 pr-0.5 text-[19px] font-medium text-[#726E6E] shadow-sm transition-colors hover:border-[#03BFA5] hover:text-[#03BFA5] disabled:cursor-not-allowed disabled:opacity-40"
+          className="absolute -left-5 top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center rounded-full border border-[#D5D5D5] bg-white pb-0.5 pr-0.5 text-[19px] font-medium text-[#726E6E] shadow-sm transition-colors hover:border-[#03BFA5] hover:text-[#03BFA5] disabled:cursor-not-allowed disabled:opacity-40"
         >
           <span className="inline-block scale-y-180">&lt;</span>
         </button>
@@ -244,7 +247,7 @@ function LikedProductsCarousel({ products, onRemove }) {
           onClick={() => goToPage(currentPage + 1)}
           disabled={currentPage === totalPages - 1}
           aria-label="다음 상품"
-          className="absolute -right-22 top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center rounded-full border border-[#D5D5D5] bg-white pb-0.5 pl-0.5 text-[19px] font-medium text-[#726E6E] shadow-sm transition-colors hover:border-[#03BFA5] hover:text-[#03BFA5] disabled:cursor-not-allowed disabled:opacity-40"
+          className="absolute -right-5 top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center rounded-full border border-[#D5D5D5] bg-white pb-0.5 pl-0.5 text-[19px] font-medium text-[#726E6E] shadow-sm transition-colors hover:border-[#03BFA5] hover:text-[#03BFA5] disabled:cursor-not-allowed disabled:opacity-40"
         >
           <span className="inline-block scale-y-180">&gt;</span>
         </button>
@@ -427,7 +430,7 @@ function TagField({ label, required, tags, caption, groups, emptyHelper, onEdit,
   );
 }
 
-function InfoTab({ profile, optionTags, onEditField, onResubmit }) {
+function InfoTab({ profile, optionTags, onEditField, onResubmit, resubmitting, resubmitError }) {
   if (!profile) {
     return <p className="py-24 text-center text-[#8A8A8A]">개인정보를 불러오지 못했어요.</p>;
   }
@@ -445,7 +448,7 @@ function InfoTab({ profile, optionTags, onEditField, onResubmit }) {
 
   const requiredFilled = [
     Boolean(profile.birthdate),
-    Boolean(profile.annualIncome),
+    profile.annualIncome !== null && profile.annualIncome !== undefined,
     Boolean(profile.householdSize && profile.householdIncomePercent),
     hasTransactionHistory,
     Boolean(profile.monthlySavingsGoal),
@@ -490,7 +493,7 @@ function InfoTab({ profile, optionTags, onEditField, onResubmit }) {
           <TextField
             required
             label="개인 연 소득"
-            value={profile.annualIncome ? `${profile.annualIncome.toLocaleString()} 만원` : ""}
+            value={profile.annualIncome !== null && profile.annualIncome !== undefined ? `${profile.annualIncome.toLocaleString()} 만원` : ""}
             emptyHelper="연 소득 입력이 필요해요."
             onEdit={() => onEditField("income")}
           />
@@ -590,10 +593,12 @@ function InfoTab({ profile, optionTags, onEditField, onResubmit }) {
         <button
           type="button"
           onClick={onResubmit}
-          className="flex h-14 w-full items-center justify-center gap-2 rounded-lg bg-[#03BFA5] text-[18px] font-medium text-white transition-colors hover:bg-[#02A892]"
+          disabled={resubmitting}
+          className="flex h-14 w-full items-center justify-center gap-2 rounded-lg bg-[#03BFA5] text-[18px] font-medium text-white transition-colors hover:bg-[#02A892] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          이 정보로 다시 추천 받기 →
+          {resubmitting ? "분석 중이에요..." : "이 정보로 다시 추천 받기 →"}
         </button>
+        {resubmitError && <p className="text-[13px] text-[#D3455B]">{resubmitError}</p>}
         <p className="text-[13px] text-[#8A8A8A]">{summaryCaption}</p>
       </div>
     </section>
@@ -604,8 +609,12 @@ function InfoTab({ profile, optionTags, onEditField, onResubmit }) {
 
 export default function MyPage() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("liked");
+  const location = useLocation();
+  const { accessToken } = useAuth();
+  const [activeTab, setActiveTab] = useState(location.state?.activeTab === "info" ? "info" : "liked");
   const [editingField, setEditingField] = useState(null);
+  const [resubmitting, setResubmitting] = useState(false);
+  const [resubmitError, setResubmitError] = useState(null);
   const { profile, categories, optionTagsByCategory, favorites, showComparisonNotice, loading, updateProfile, removeFavorite } =
     useMyPage();
 
@@ -614,8 +623,27 @@ export default function MyPage() {
     if (result.ok) setEditingField(null);
   };
 
+  const handleResubmit = async () => {
+    setResubmitError(null);
+    setResubmitting(true);
+    try {
+      const request = buildRecommendationRequestFromProfile(profile, categories);
+      const recommendation = await runProductSearch(request, accessToken);
+      navigate("/products", {
+        state: {
+          recommendationResult: recommendation.result,
+          recommendationRequest: recommendation.request,
+        },
+      });
+    } catch (error) {
+      console.error("이 정보로 다시 추천 받기 실패:", error);
+      setResubmitError(error.message || "상품 재검색에 실패했습니다. 잠시 후 다시 시도해주세요.");
+      setResubmitting(false);
+    }
+  };
+
   return (
-    <div className="flex min-h-screen flex-col bg-white font-inter">
+    <div className="flex min-h-screen flex-col bg-white font-pretendard">
       <div className="border border-[#EBEBEB]">
         <div className="mx-auto max-w-400 py-0.5">
           <Tabs active={activeTab} onChange={setActiveTab} likedCount={favorites.length} />
@@ -638,7 +666,9 @@ export default function MyPage() {
               profile={profile}
               optionTags={optionTagsByCategory}
               onEditField={setEditingField}
-              onResubmit={() => navigate("/recommend")}
+              onResubmit={handleResubmit}
+              resubmitting={resubmitting}
+              resubmitError={resubmitError}
             />
           )}
         </main>
