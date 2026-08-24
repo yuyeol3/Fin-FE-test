@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import client from "../api/client";
 import { fetchBankProviders } from "../api/products";
-import { fetchUserProfile, saveUserProfile } from "../api/user";
 import { fetchFavorites, removeFavorite as removeFavoriteRequest } from "../api/favorites";
 import { CATEGORY_ID, findCategoryById } from "../utils/recommendationPayload";
 import { readPersistedRecommendation } from "../utils/recommendationResult";
@@ -151,14 +150,14 @@ export default function useMyPage() {
       setLoading(true);
       setError(null);
       try {
-        const [profileData, categoriesRes, favoritesData, bankProviders] = await Promise.all([
-          fetchUserProfile(),
+        const [profileRes, categoriesRes, favoritesData, bankProviders] = await Promise.all([
+          client.get("/user/me/profile"),
           client.get("/api/categories"),
           fetchFavorites(readPersistedRecommendation()?.request ?? null),
           fetchBankProviders(),
         ]);
         if (cancelled) return;
-        setProfile(profileData);
+        setProfile(profileRes.data);
         setCategories(categoriesRes.data || []);
         setBanks(bankProviders);
         setFavorites(favoritesData.items || []);
@@ -202,8 +201,9 @@ export default function useMyPage() {
 
     const body = buildProfileRequestBody(profile, patch);
     try {
-      await saveUserProfile(body);
-      setProfile(await fetchUserProfile());
+      await client.put("/user/me/profile", body);
+      const res = await client.get("/user/me/profile");
+      setProfile(res.data);
       return { ok: true };
     } catch (e) {
       console.error("개인정보 수정에 실패했습니다:", e);

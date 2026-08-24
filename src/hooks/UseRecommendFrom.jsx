@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import client from "../api/client";
 import {
@@ -7,12 +7,9 @@ import {
   fetchProductDetail,
   searchProducts,
 } from "../api/products";
-import { fetchUserProfile, saveUserProfile } from "../api/user";
 import {
-  applyProfileToFormData,
   buildBankCategories,
   buildBankNameByCode,
-  buildProfileRequest,
   buildRecommendationRequest,
   mapRecommendCategories,
 } from "../utils/recommendationPayload";
@@ -123,8 +120,6 @@ export default function useRecommendForm() {
   const [loading, setLoading] = useState(true);
   const mockMode = isMockRecommendMode();
   const householdCount = formData.householdCount || 1;
-  // PUT /user/me/profile은 전체 덮어쓰기라, 폼이 다루지 않는 값을 이어받기 위해 직전 프로필을 들고 있는다.
-  const savedProfileRef = useRef(null);
 
   useEffect(() => {
     if (mockMode) {
@@ -140,30 +135,17 @@ export default function useRecommendForm() {
 
     const loadFormOptions = async () => {
       try {
-        // 저장된 프로필 조회는 실패해도 폼 자체는 열려야 한다.
-        const [categoriesRes, banks, profile] = await Promise.all([
+        const [categoriesRes, banks] = await Promise.all([
           client.get("/api/categories"),
           fetchBankProviders(),
-          fetchUserProfile().catch((e) => {
-            console.error("저장된 개인정보를 불러오지 못했습니다:", e);
-            return null;
-          }),
         ]);
         if (cancelled) return;
 
-        const mappedCats = mapRecommendCategories(categoriesRes.data, {
+        setCats(mapRecommendCategories(categoriesRes.data, {
           bankCategories: buildBankCategories(banks),
           bankNameByCode: buildBankNameByCode(banks),
           incomeLevel: FALLBACK_INCOME_LEVELS,
-        });
-        setCats(mappedCats);
-
-        savedProfileRef.current = profile;
-        const prefilled = applyProfileToFormData(profile, mappedCats);
-        // 사용자가 이미 입력을 시작했다면 덮어쓰지 않는다.
-        if (prefilled) {
-          setFormData((prev) => (Object.keys(prev).length > 0 ? prev : prefilled));
-        }
+        }));
       } catch (e) {
         console.error("추천 폼 옵션을 불러오지 못했습니다:", e);
       } finally {
@@ -213,21 +195,7 @@ export default function useRecommendForm() {
       throw new Error(error.response?.data?.message || "상품 분석에 실패했습니다.");
     }
 
-    // 입력한 개인정보를 저장한다. 저장이 실패해도 이미 계산된 추천 결과는 보여준다.
-    const persistProfile = async () => {
-      try {
-        await saveUserProfile(buildProfileRequest(formData, cats, savedProfileRef.current));
-        savedProfileRef.current = await fetchUserProfile();
-      } catch (e) {
-        console.error("개인정보를 저장하지 못했습니다:", e);
-      }
-    };
-
-    const [productDetails] = await Promise.all([
-      fetchProductDetails(result, request),
-      persistProfile(),
-    ]);
-
+    const productDetails = await fetchProductDetails(result, request);
     const recommendation = {
       request,
       result: {
