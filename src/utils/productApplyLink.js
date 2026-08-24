@@ -1,7 +1,21 @@
-// 백엔드가 property.applyUrl ?? provider.applyUrl 로 이미 폴백을 처리한다.
-// 그래도 null이면 공식 신청 페이지가 없다는 뜻이므로 검색 링크를 만들어내지 않는다.
 export function getProductApplyUrl(product) {
-  return { url: product?.applyUrl ?? null };
+  const directUrl = product?.applyUrl || product?.applicationUrl || product?.officialUrl;
+
+  if (directUrl) {
+    return {
+      url: directUrl,
+      isFallback: false,
+    };
+  }
+
+  const query = [product?.title, product?.institution, "신청"]
+    .filter(Boolean)
+    .join(" ");
+
+  return {
+    url: `https://www.google.com/search?q=${encodeURIComponent(query || "청년 금융상품 신청")}`,
+    isFallback: true,
+  };
 }
 
 export function getProductApplicationBadge(product) {
@@ -19,6 +33,5 @@ export function getProductApplicationBadgeVariant(product) {
 
 export function openProductApplication(product) {
   const { url } = getProductApplyUrl(product);
-  if (!url) return;
   window.open(url, "_blank", "noopener,noreferrer");
 }

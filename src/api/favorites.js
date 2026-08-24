@@ -1,19 +1,8 @@
 import client from "./client";
 
-// 백엔드가 SearchRequestDto를 요구하는 최소 형태.
-// options / detailedOptions 는 @NotNull 이라 빈 값이라도 반드시 채워야 한다.
-const EMPTY_SEARCH_REQUEST = { options: [], detailedOptions: {} };
-
-/**
- * 찜 목록. 응답은 { items, showComparisonNotice } 형태다.
- *
- * GET /favorites 는 내부적으로 request=null 로 호출되는데
- * RateCalculatorService가 request를 널 체크 없이 역참조해 500(C002)이 난다.
- * 같은 데이터를 주는 POST /favorites/list 에 바디를 실어 보내 우회한다.
- * 추천 조건(request)을 넘기면 적합도·달성 가능 금리까지 프로필 기준으로 재계산된다.
- */
-export async function fetchFavorites(request) {
-  const res = await client.post("/favorites/list", request ?? EMPTY_SEARCH_REQUEST);
+// 응답은 { items, showComparisonNotice } 형태다.
+export async function fetchFavorites() {
+  const res = await client.get("/favorites");
   return res.data ?? { items: [], showComparisonNotice: false };
 }
 

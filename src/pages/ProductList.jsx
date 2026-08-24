@@ -1,13 +1,16 @@
 import { useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import InfoIcon from "../components/InfoIcon";
 import { TopCard, ListItem } from "../components/ProductComponents";
 import icon_1_fin_sector from "../assets/icon_1_fin_sector.png";
 import icon_gov_support from "../assets/icon_gov_support.png";
 import icon_subscription from "../assets/icon_subscription.png";
-import useProductList from "../hooks/UseProductList";
-import useFavorites from "../hooks/UseFavorites";
+import { PRODUCTS } from "../data/products";
+import {
+  applyRecommendationResult,
+  readPersistedRecommendation,
+} from "../utils/recommendationResult";
 
 const SECTIONS = [
   { name: "정부 청년 상품", filterKey: "정부 지원" },
@@ -16,24 +19,33 @@ const SECTIONS = [
 ];
 
 export default function ProductList() {
-  const { accessToken } = useAuth();
+  const { accessToken, userRole } = useAuth();
   const isLoggedIn = Boolean(accessToken);
+  const hasRecommendationAccess = userRole === "RECOMMENDATION" || userRole === "ADMIN";
   const navigate = useNavigate();
+  const location = useLocation();
   const sectionListRef = useRef(null);
   const stickyHeaderRef = useRef(null);
+  const persistedRecommendation = useMemo(
+    () => readPersistedRecommendation(),
+    [],
+  );
+  const recommendationResult = location.state?.recommendationResult
+    ?? persistedRecommendation?.result;
+  const recommendationCount = recommendationResult
+    ? (recommendationResult.governmentRanked?.length || 0)
+      + (recommendationResult.bankRanked?.length || 0)
+    : null;
+
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("나에게 맞는 순");
   const [activeFilter, setActiveFilter] = useState("전체");
   const [blockedModalReason, setBlockedModalReason] = useState(null); // "login" | "agree" | null
-
-  // 금리 순 탭은 백엔드의 tabB 게이팅을 그대로 따른다.
-  const sortMode = activeTab === "내가 받을 수 있는 금리 순" ? "rate" : "match";
-  const { products: recommendationProducts, loading, hasRecommendation, tabs } = useProductList(sortMode);
-  const { isFavorite, toggleFavorite } = useFavorites();
-
-  const rateTabEnabled = Boolean(tabs?.tabBEnabled);
-  const effectiveActiveTab = !rateTabEnabled && activeTab === "내가 받을 수 있는 금리 순" ? "나에게 맞는 순" : activeTab;
-  const recommendationCount = hasRecommendation ? recommendationProducts.length : null;
+  const effectiveActiveTab = !hasRecommendationAccess && activeTab === "내가 받을 수 있는 금리 순" ? "나에게 맞는 순" : activeTab;
+  const recommendationProducts = useMemo(
+    () => applyRecommendationResult(PRODUCTS, recommendationResult, hasRecommendationAccess),
+    [hasRecommendationAccess, recommendationResult],
+  );
 
   const filters = [
     { label: "전체", icon: null },
@@ -43,23 +55,15 @@ export default function ProductList() {
   ];
 
   const handleTabClick = (tabName) => {
-    if (tabName === "내가 받을 수 있는 금리 순" && !rateTabEnabled) {
+    if (tabName === "내가 받을 수 있는 금리 순" && !hasRecommendationAccess) {
       setBlockedModalReason(isLoggedIn ? "agree" : "login");
       return;
     }
     setActiveTab(tabName);
   };
 
-  // 상세는 productPropertyId가 있어야 목록과 같은 수치를 보여준다.
-  const goToProductDetail = (product) => {
-    navigate(`/products/${product.id}`, {
-      state: { productPropertyId: product.productPropertyId },
-    });
-  };
-
-  const handleToggleFavorite = async (product) => {
-    const outcome = await toggleFavorite(product.productPropertyId);
-    if (outcome === "login") setBlockedModalReason("login");
+  const goToProductDetail = (productId) => {
+    navigate(`/products/${productId}`);
   };
 
   const scrollToSectionList = () => {
@@ -79,9 +83,10 @@ export default function ProductList() {
         activeFilter === "전체" ||
         SECTIONS.some((section) => section.filterKey === activeFilter && section.name === product.category);
       return matchesSearch && matchesFilter;
-    });
-    // 정렬은 백엔드 순서를 그대로 쓴다(정부 기여금 환산수익률과 은행 금리를 섞어 정렬하면 안 된다).
-  }, [activeFilter, recommendationProducts, searchTerm]);
+    }).sort((a, b) =>
+      effectiveActiveTab === "나에게 맞는 순" ? b.suitability - a.suitability : parseFloat(b.myRate) - parseFloat(a.myRate),
+    );
+  }, [activeFilter, effectiveActiveTab, recommendationProducts, searchTerm]);
 
   const topThree = processedProducts.slice(0, 3);
 
@@ -134,7 +139,7 @@ export default function ProductList() {
                     : "text-[#03BFA5] bg-white border-[#03BFA5]"
                 }`}
               >
-                {!rateTabEnabled && (
+                {!hasRecommendationAccess && (
                   <svg className="w-4 h-4 text-[#03BFA5]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
                     <path d="M7 11V7a5 5 0 0 1 10 0v4" />
@@ -185,7 +190,7 @@ export default function ProductList() {
 
               {/* 안내 문구 */}
               <div className="flex items-center gap-1.5 mt-5 text-[15px] font-medium text-[#03BFA5] text-[15px] font-bold">
-                {rateTabEnabled ? (
+                {hasRecommendationAccess ? (
                   <>
                     <div className="w-[16px] h-[16px] rounded-full bg-[#03BFA5] text-white flex items-center justify-center">✓</div>
                     <span>
@@ -225,15 +230,14 @@ export default function ProductList() {
                     myRate={product.myRate}
                     tags={product.tags}
                     isBest={index === 0}
-                    isLoggedIn={rateTabEnabled}
+                    isLoggedIn={hasRecommendationAccess}
                     contributionRate={product.contributionRate}
                     maturityContribution={product.maturityContribution}
                     contributionCaption={product.contributionCaption}
-                    rateNote={product.rateNote}
-                    showContribution={product.category === "정부 청년 상품" && product.hasCalculatedContribution}
-                    isFavorite={isFavorite(product.productPropertyId)}
-                    onToggleFavorite={() => handleToggleFavorite(product)}
-                    onClick={() => goToProductDetail(product)}
+                    showContribution={product.category === "정부 청년 상품" || product.category === "청약 상품"}
+                    onClick={product.isBackendOnly
+                      ? undefined
+                      : () => goToProductDetail(product.id)}
                   />
                 ))}
               </div>
@@ -242,7 +246,7 @@ export default function ProductList() {
             {/* 하단 세로형 분리 목록 */}
             {processedProducts.length === 0 ? (
               <div className="mt-8 flex min-h-[160px] items-center justify-center rounded-[10px] border border-[#E0DFDF] text-[17px] font-medium text-[#606060]">
-                {loading ? "상품을 불러오는 중이에요..." : "검색 결과가 없어요."}
+                검색 결과가 없어요.
               </div>
             ) : (
               <>
@@ -278,15 +282,14 @@ export default function ProductList() {
                             maxRate={product.maxRate}
                             myRate={product.myRate}
                             tags={product.tags}
-                            isLoggedIn={rateTabEnabled}
-                            variant={sec.name === "정부 청년 상품" && product.hasCalculatedContribution ? "contribution" : "rate"}
+                            isLoggedIn={hasRecommendationAccess}
+                            variant={sec.name === "정부 청년 상품" ? "contribution" : "rate"}
                             contributionRate={product.contributionRate}
                             maturityContribution={product.maturityContribution}
                             contributionCaption={product.contributionCaption}
-                            rateNote={product.rateNote}
-                            isFavorite={isFavorite(product.productPropertyId)}
-                            onToggleFavorite={() => handleToggleFavorite(product)}
-                            onClick={() => goToProductDetail(product)}
+                            onClick={product.isBackendOnly
+                              ? undefined
+                              : () => goToProductDetail(product.id)}
                           />
                         ))}
                       </div>

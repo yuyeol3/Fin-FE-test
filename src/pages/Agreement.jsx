@@ -6,7 +6,7 @@ import AgreementItem from '../components/AgreementItem';
 import ContentModal from '../components/ContentModal';
 
 function Agreement() {
-  const { accessToken, setUserRole, isInitialized } = useAuth();
+  const { accessToken, setUserRole } = useAuth();
   const navigate = useNavigate();
   const [terms, setTerms] = useState([]);
   const [checks, setChecks] = useState({ age: false });
@@ -18,11 +18,6 @@ function Agreement() {
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = ''; };
   }, []);
-
-  // /terms는 가드가 없는 라우트라 비로그인으로 들어오면 빈 모달만 남는다.
-  useEffect(() => {
-    if (isInitialized && !accessToken) navigate('/login', { replace: true });
-  }, [isInitialized, accessToken, navigate]);
 
   useEffect(() => {
     if (!accessToken) return;
