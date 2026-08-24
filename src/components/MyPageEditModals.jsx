@@ -4,7 +4,13 @@ import { FormInput, FormSelect } from "./FormFields";
 import InfoBox from "./InfoBox";
 import { BankSelector } from "./RecommendSteps";
 import { findCategoryOptions, findSelectedOptionIds, replaceCategorySelection } from "../hooks/UseMyPage";
-import { CATEGORY_ID, buildBankCategories, buildBankNameByCode } from "../utils/recommendationPayload";
+
+const BANK_CATEGORIES = [
+  { id: "시중", title: "시중은행", banks: ["KB국민", "신한", "하나", "우리", "SC제일", "iM뱅크"] },
+  { id: "인터넷", title: "인터넷은행", banks: ["카카오뱅크", "토스뱅크", "케이뱅크"] },
+  { id: "특수", title: "특수은행", banks: ["NH농협", "Sh수협", "IBK기업"] },
+  { id: "지방", title: "지방은행", banks: ["BNK부산", "광주은행", "제주은행", "전북은행", "BNK경남은행"] },
+];
 
 const INCOME_LEVELS = [
   { percent: 60, guide: "월 154만원 이하" },
@@ -273,13 +279,13 @@ function HouseholdModal({ profile, onClose, onSave }) {
 }
 
 function RegionModal({ profile, categories, onClose, onSave }) {
-  const options = findCategoryOptions(categories, CATEGORY_ID.regions);
-  const currentId = findSelectedOptionIds(categories, CATEGORY_ID.regions, profile.selectedOptionIds)[0] ?? "";
+  const options = findCategoryOptions(categories, "거주지역");
+  const currentId = findSelectedOptionIds(categories, "거주지역", profile.selectedOptionIds)[0] ?? "";
   const [selectedId, setSelectedId] = useState(currentId);
 
   const handleSave = () => {
     const newIds = selectedId ? [Number(selectedId)] : [];
-    onSave({ selectedOptionIds: replaceCategorySelection(profile.selectedOptionIds, categories, CATEGORY_ID.regions, newIds) });
+    onSave({ selectedOptionIds: replaceCategorySelection(profile.selectedOptionIds, categories, "거주지역", newIds) });
   };
 
   return (
@@ -299,14 +305,14 @@ function RegionModal({ profile, categories, onClose, onSave }) {
   );
 }
 
-function SingleChoiceOptionModal({ title, categoryId, profile, categories, onClose, onSave, required = false }) {
-  const options = findCategoryOptions(categories, categoryId);
-  const currentId = findSelectedOptionIds(categories, categoryId, profile.selectedOptionIds)[0] ?? null;
+function SingleChoiceOptionModal({ title, categoryName, profile, categories, onClose, onSave, required = false }) {
+  const options = findCategoryOptions(categories, categoryName);
+  const currentId = findSelectedOptionIds(categories, categoryName, profile.selectedOptionIds)[0] ?? null;
   const [selectedId, setSelectedId] = useState(currentId);
 
   const handleSave = () => {
     const newIds = selectedId ? [selectedId] : [];
-    onSave({ selectedOptionIds: replaceCategorySelection(profile.selectedOptionIds, categories, categoryId, newIds) });
+    onSave({ selectedOptionIds: replaceCategorySelection(profile.selectedOptionIds, categories, categoryName, newIds) });
   };
 
   return (
@@ -332,9 +338,9 @@ function SingleChoiceOptionModal({ title, categoryId, profile, categories, onClo
   );
 }
 
-function MultiChoiceOptionModal({ title, categoryId, profile, categories, onClose, onSave, required = false }) {
-  const options = findCategoryOptions(categories, categoryId);
-  const currentIds = findSelectedOptionIds(categories, categoryId, profile.selectedOptionIds);
+function MultiChoiceOptionModal({ title, categoryName, profile, categories, onClose, onSave, required = false }) {
+  const options = findCategoryOptions(categories, categoryName);
+  const currentIds = findSelectedOptionIds(categories, categoryName, profile.selectedOptionIds);
   const [selectedIds, setSelectedIds] = useState(currentIds);
 
   const toggle = (id) => {
@@ -342,7 +348,7 @@ function MultiChoiceOptionModal({ title, categoryId, profile, categories, onClos
   };
 
   const handleSave = () => {
-    onSave({ selectedOptionIds: replaceCategorySelection(profile.selectedOptionIds, categories, categoryId, selectedIds) });
+    onSave({ selectedOptionIds: replaceCategorySelection(profile.selectedOptionIds, categories, categoryName, selectedIds) });
   };
 
   return (
@@ -474,16 +480,10 @@ function HousingModal({ profile, onClose, onSave }) {
   );
 }
 
-function TransactionModal({ profile, banks, onClose, onSave }) {
+function TransactionModal({ profile, onClose, onSave }) {
   const [subStep, setSubStep] = useState(1);
   const [neverUsedBanks, setNeverUsedBanks] = useState(profile.neverUsedBanks || []);
   const [maturedSavingBanks, setMaturedSavingBanks] = useState(profile.maturedSavingBanks || []);
-
-  // 선택 값은 은행 코드다. 프로필 API가 코드를 주고받으므로 그대로 왕복시킨다.
-  const bankCats = {
-    bankCategories: buildBankCategories(banks),
-    bankNameByCode: buildBankNameByCode(banks),
-  };
 
   const handlePrimaryAction = () => {
     if (subStep === 1) {
@@ -513,7 +513,7 @@ function TransactionModal({ profile, banks, onClose, onSave }) {
             theme="mint"
             title="첫거래 은행"
             infoText="아직 거래해본 적 없는 은행을 선택하면, 해당 은행의 '첫거래 우대금리'가 자동 반영됩니다."
-            cats={bankCats}
+            cats={{ bankCategories: BANK_CATEGORIES }}
             selectedBanks={neverUsedBanks}
             onChange={setNeverUsedBanks}
           />
@@ -522,7 +522,7 @@ function TransactionModal({ profile, banks, onClose, onSave }) {
             theme="blue"
             title="만기 예적금이 있는 은행"
             infoText="만기된(될) 예적금이 있는 은행을 선택하면 해당 은행의 '재예치 우대금리'가 자동 반영됩니다."
-            cats={bankCats}
+            cats={{ bankCategories: BANK_CATEGORIES }}
             selectedBanks={maturedSavingBanks}
             onChange={setMaturedSavingBanks}
             disabledBanks={neverUsedBanks}
@@ -559,7 +559,7 @@ function TransactionModal({ profile, banks, onClose, onSave }) {
   );
 }
 
-export default function EditFieldModal({ fieldKey, profile, categories, banks, onClose, onSave }) {
+export default function EditFieldModal({ fieldKey, profile, categories, onClose, onSave }) {
   if (!profile || !categories) return null;
 
   switch (fieldKey) {
@@ -578,12 +578,12 @@ export default function EditFieldModal({ fieldKey, profile, categories, banks, o
     case "housing":
       return <HousingModal profile={profile} onClose={onClose} onSave={onSave} />;
     case "transaction":
-      return <TransactionModal profile={profile} banks={banks} onClose={onClose} onSave={onSave} />;
+      return <TransactionModal profile={profile} onClose={onClose} onSave={onSave} />;
     case "savingPeriod":
       return (
         <SingleChoiceOptionModal
           title="저축 기간"
-          categoryId={CATEGORY_ID.savingPeriod}
+          categoryName="저축기간"
           required
           profile={profile}
           categories={categories}
@@ -595,7 +595,7 @@ export default function EditFieldModal({ fieldKey, profile, categories, banks, o
       return (
         <SingleChoiceOptionModal
           title="현재 신분"
-          categoryId={CATEGORY_ID.status}
+          categoryName="현재신분"
           profile={profile}
           categories={categories}
           onClose={onClose}
@@ -606,7 +606,7 @@ export default function EditFieldModal({ fieldKey, profile, categories, banks, o
       return (
         <MultiChoiceOptionModal
           title="핵심 혜택"
-          categoryId={CATEGORY_ID.benefits}
+          categoryName="핵심혜택"
           profile={profile}
           categories={categories}
           onClose={onClose}
@@ -617,7 +617,7 @@ export default function EditFieldModal({ fieldKey, profile, categories, banks, o
       return (
         <MultiChoiceOptionModal
           title="은행 거래"
-          categoryId={CATEGORY_ID.bankRelation}
+          categoryName="은행거래"
           required
           profile={profile}
           categories={categories}

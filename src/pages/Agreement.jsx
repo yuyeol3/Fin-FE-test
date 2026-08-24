@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import client, { refreshAccessToken } from '../api/client';
 import AgreementItem from '../components/AgreementItem';
 import ContentModal from '../components/ContentModal';
 
@@ -23,22 +22,24 @@ function Agreement() {
     if (!accessToken) return;
     const fetchTerms = async () => {
       try {
-        const res = await client.get("/term");
-        const data = res.data ?? [];
+        const res = await fetch("https://test-fin.duckdns.org/term", {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        const data = await res.json();
         setTerms(data);
         const initialChecks = { age: false };
         data.forEach(t => { initialChecks[t.code] = false; });
         setChecks(initialChecks);
       } catch (e) {
-        console.error("약관을 불러오지 못했습니다:", e);
+        console.error(e);
       }
     };
     fetchTerms();
   }, [accessToken]);
 
-  // 필수 약관은 서버가 isRequired로 알려준다. 코드를 프론트에 하드코딩하지 않는다.
   const isRequiredFilled = checks.age &&
-    terms.filter(t => t.isRequired).every(t => checks[t.code]);
+    terms.filter(t => t.code === 'SERVICE_TERMS' || t.code === 'PRIVACY_POLICY')
+      .every(t => checks[t.code]);
 
   const handleAll = () => {
     const nextVal = !isAllChecked;
@@ -57,17 +58,26 @@ function Agreement() {
         versionId: t.versionId,
         agreed: checks[t.code] ?? false
       }));
-      const res = await client.post("/term", { agreements });
+      const res = await fetch("https://test-fin.duckdns.org/term", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json"
+      },
+        body: JSON.stringify({
+          agreements: terms.map(t => ({
+            versionId: t.versionId,
+            agreed: checks[t.code] ?? false
+          }))
+        })
+      });
+      if (!res.ok) throw new Error("약관 동의 실패");
 
-      if (res.data?.userRole) setUserRole(res.data.userRole);
-
-      // 백엔드는 약관 동의 시 JWT를 재발급하지 않는다.
-      // 갱신하지 않으면 토큰의 required_terms_agreement가 계속 false로 남는다.
-      await refreshAccessToken().catch(() => {});
+      const data = await res.json();
+      if (data?.userRole) setUserRole(data.userRole);
 
       navigate('/introduce', { replace: true });
     } catch (e) {
-      console.error("약관 동의에 실패했습니다:", e);
+      console.error(e);
     }
   };
 

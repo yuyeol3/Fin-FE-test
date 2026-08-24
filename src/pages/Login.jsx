@@ -1,4 +1,3 @@
-import { oauthLoginUrl } from '../api/client'
 import bubbleBg from '../assets/background_bubble.png'
 import keyImg from '../assets/keyImg.png'
 import googleIcon from '../assets/GoogleIcon.png'
@@ -46,7 +45,7 @@ function AuthButtons() {
 
 function KakaoButton() {
   const handleKakaoLogin = () => {
-    window.location.href = oauthLoginUrl("kakao");
+    window.location.href = "https://test-fin.duckdns.org/oauth2/authorization/kakao";
   };
   return (
     <button
@@ -60,7 +59,7 @@ function KakaoButton() {
 
 function GoogleButton() {
   const handleGoogleLogin = () => {
-    window.location.href = oauthLoginUrl("google");
+    window.location.href = "https://test-fin.duckdns.org/oauth2/authorization/google";
   };
   return (
     <button

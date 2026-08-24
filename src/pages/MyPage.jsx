@@ -606,7 +606,7 @@ export default function MyPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("liked");
   const [editingField, setEditingField] = useState(null);
-  const { profile, categories, banks, optionTagsByCategory, favorites, showComparisonNotice, loading, updateProfile, removeFavorite } =
+  const { profile, categories, optionTagsByCategory, favorites, showComparisonNotice, loading, updateProfile, removeFavorite } =
     useMyPage();
 
   const handleSaveField = async (patch) => {
@@ -649,7 +649,6 @@ export default function MyPage() {
           fieldKey={editingField}
           profile={profile}
           categories={categories}
-          banks={banks}
           onClose={() => setEditingField(null)}
           onSave={handleSaveField}
         />

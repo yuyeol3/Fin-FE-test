@@ -1,22 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import client from "../api/client";
-import { fetchBankProviders } from "../api/products";
-import { fetchFavorites, removeFavorite as removeFavoriteRequest } from "../api/favorites";
-import { CATEGORY_ID, findCategoryById } from "../utils/recommendationPayload";
-import {
-  MOCK_PROFILE,
-  MOCK_OPTION_CATEGORIES,
-  MOCK_FAVORITES,
-  MOCK_BANK_PROVIDERS,
-} from "../data/mypage";
+import client, { withAuth } from "../api/client";
+import { MOCK_PROFILE, MOCK_OPTION_CATEGORIES, MOCK_FAVORITES } from "../data/mypage";
 
-// 카테고리 이름은 DB 텍스트라 바뀔 수 있어서 CategoryIdEnum 기준 id로 매칭한다.
-const CATEGORY_ID_BY_GROUP = {
-  savingPeriod: CATEGORY_ID.savingPeriod,
-  status: CATEGORY_ID.status,
-  benefits: CATEGORY_ID.benefits,
-  bankRelation: CATEGORY_ID.bankRelation,
+const CATEGORY_NAME_BY_GROUP = {
+  savingPeriod: "저축기간",
+  status: "현재신분",
+  benefits: "핵심혜택",
+  bankRelation: "은행거래",
 };
 
 export function splitTrailingParen(value) {
@@ -37,18 +28,15 @@ function buildOptionTagsByCategory(profile, categories) {
   const optionMap = {};
   categories.forEach((category) => {
     (category.options || []).forEach((option) => {
-      optionMap[option.optionId] = {
-        categoryId: Number(category.categoryId),
-        optionValue: option.optionValue,
-      };
+      optionMap[option.optionId] = { categoryName: category.categoryName, optionValue: option.optionValue };
     });
   });
 
   (profile.selectedOptionIds || []).forEach((id) => {
     const option = optionMap[id];
     if (!option) return;
-    const groupKey = Object.keys(CATEGORY_ID_BY_GROUP).find(
-      (key) => CATEGORY_ID_BY_GROUP[key] === option.categoryId,
+    const groupKey = Object.keys(CATEGORY_NAME_BY_GROUP).find(
+      (key) => CATEGORY_NAME_BY_GROUP[key] === option.categoryName,
     );
     if (groupKey) groups[groupKey].push(option.optionValue);
   });
@@ -56,17 +44,17 @@ function buildOptionTagsByCategory(profile, categories) {
   return groups;
 }
 
-export function findCategoryOptions(categories, categoryId) {
-  return findCategoryById(categories, categoryId)?.options || [];
+export function findCategoryOptions(categories, categoryName) {
+  return categories?.find((category) => category.categoryName === categoryName)?.options || [];
 }
 
-export function findSelectedOptionIds(categories, categoryId, selectedOptionIds) {
-  const ids = new Set(findCategoryOptions(categories, categoryId).map((option) => option.optionId));
+export function findSelectedOptionIds(categories, categoryName, selectedOptionIds) {
+  const ids = new Set(findCategoryOptions(categories, categoryName).map((option) => option.optionId));
   return (selectedOptionIds || []).filter((id) => ids.has(id));
 }
 
-export function replaceCategorySelection(selectedOptionIds, categories, categoryId, newIds) {
-  const ids = new Set(findCategoryOptions(categories, categoryId).map((option) => option.optionId));
+export function replaceCategorySelection(selectedOptionIds, categories, categoryName, newIds) {
+  const ids = new Set(findCategoryOptions(categories, categoryName).map((option) => option.optionId));
   const kept = (selectedOptionIds || []).filter((id) => !ids.has(id));
   return [...kept, ...newIds];
 }
@@ -111,7 +99,7 @@ function applyMockPatch(prev, patch, categories) {
   }
 
   if (patch.selectedOptionIds) {
-    const regionOption = findCategoryOptions(categories, CATEGORY_ID.regions).find((option) =>
+    const regionOption = findCategoryOptions(categories, "거주지역").find((option) =>
       patch.selectedOptionIds.includes(option.optionId),
     );
     if (regionOption) display.region = regionOption.optionValue;
@@ -133,7 +121,6 @@ export default function useMyPage() {
 
   const [profile, setProfile] = useState(mockMode ? MOCK_PROFILE : null);
   const [categories, setCategories] = useState(mockMode ? MOCK_OPTION_CATEGORIES : null);
-  const [banks, setBanks] = useState(mockMode ? MOCK_BANK_PROVIDERS : []);
   const [favorites, setFavorites] = useState(mockMode ? MOCK_FAVORITES.items : []);
   const [showComparisonNotice, setShowComparisonNotice] = useState(
     mockMode ? MOCK_FAVORITES.showComparisonNotice : false,
@@ -149,18 +136,16 @@ export default function useMyPage() {
       setLoading(true);
       setError(null);
       try {
-        const [profileRes, categoriesRes, favoritesData, bankProviders] = await Promise.all([
-          client.get("/user/me/profile"),
-          client.get("/api/categories"),
-          fetchFavorites(),
-          fetchBankProviders(),
+        const [profileRes, categoriesRes, favoritesRes] = await Promise.all([
+          client.get("/user/me/profile", withAuth(accessToken)),
+          client.get("/api/categories", withAuth(accessToken)),
+          client.get("/favorites", withAuth(accessToken)),
         ]);
         if (cancelled) return;
         setProfile(profileRes.data);
         setCategories(categoriesRes.data || []);
-        setBanks(bankProviders);
-        setFavorites(favoritesData.items || []);
-        setShowComparisonNotice(Boolean(favoritesData.showComparisonNotice));
+        setFavorites(favoritesRes.data?.items || []);
+        setShowComparisonNotice(Boolean(favoritesRes.data?.showComparisonNotice));
       } catch (e) {
         if (!cancelled) setError(e);
         console.error("마이페이지 정보를 불러오지 못했습니다:", e);
@@ -185,7 +170,7 @@ export default function useMyPage() {
 
     if (mockMode) return;
     try {
-      await removeFavoriteRequest(productPropertyId);
+      await client.delete(`/favorites/${productPropertyId}`, withAuth(accessToken));
     } catch (e) {
       console.error("찜 삭제에 실패했습니다:", e);
       setFavorites(prevFavorites);
@@ -200,8 +185,8 @@ export default function useMyPage() {
 
     const body = buildProfileRequestBody(profile, patch);
     try {
-      await client.put("/user/me/profile", body);
-      const res = await client.get("/user/me/profile");
+      await client.put("/user/me/profile", body, withAuth(accessToken));
+      const res = await client.get("/user/me/profile", withAuth(accessToken));
       setProfile(res.data);
       return { ok: true };
     } catch (e) {
@@ -213,7 +198,6 @@ export default function useMyPage() {
   return {
     profile,
     categories,
-    banks,
     optionTagsByCategory,
     favorites,
     showComparisonNotice,

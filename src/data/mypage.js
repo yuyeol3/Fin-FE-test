@@ -29,7 +29,6 @@ export const MOCK_PROFILE = {
 
 export const MOCK_OPTION_CATEGORIES = [
   {
-    categoryId: 3,
     categoryName: "저축기간",
     options: [
       { optionId: 900, optionValue: "1년 내외(단기)" },
@@ -38,7 +37,6 @@ export const MOCK_OPTION_CATEGORIES = [
     ],
   },
   {
-    categoryId: 2,
     categoryName: "현재신분",
     options: [
       { optionId: 908, optionValue: "무소득(학생)" },
@@ -48,7 +46,6 @@ export const MOCK_OPTION_CATEGORIES = [
     ],
   },
   {
-    categoryId: 4,
     categoryName: "핵심혜택",
     options: [
       { optionId: 918, optionValue: "최고이율 중심" },
@@ -58,7 +55,6 @@ export const MOCK_OPTION_CATEGORIES = [
     ],
   },
   {
-    categoryId: 6,
     categoryName: "은행거래",
     options: [
       { optionId: 906, optionValue: "자동이체_우대" },
@@ -67,7 +63,6 @@ export const MOCK_OPTION_CATEGORIES = [
     ],
   },
   {
-    categoryId: 1,
     categoryName: "거주지역",
     options: [
       { optionId: 910, optionValue: "부산" },
@@ -170,12 +165,3 @@ export const MOCK_FAVORITES = {
     },
   ],
 };
-
-// mock 모드에서 GET /providers/banks 대신 사용하는 최소 은행 목록.
-export const MOCK_BANK_PROVIDERS = [
-  { code: "0010927", name: "KB국민은행", category: "시중" },
-  { code: "0011625", name: "신한은행", category: "시중" },
-  { code: "0015130", name: "카카오뱅크", category: "인터넷" },
-  { code: "0013175", name: "NH농협은행", category: "특수" },
-  { code: "0010017", name: "부산은행", category: "지방" },
-];
