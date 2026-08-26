@@ -14,12 +14,14 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { readPersistedRecommendation } from "../utils/recommendationResult";
+import { useAuth } from "../context/AuthContext";
 
 // 검색바가 화면 상단에서 이 정도 간격을 유지하도록 스크롤 (sticky 헤더 높이 + 여유 간격)
 const SEARCH_BAR_TOP_OFFSET = 96;
 
 export default function Recommend() {
   const { step, formData, setFormData, cats, loading, go, handleSubmit } = useRecommendForm();
+  const { accessToken } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(Boolean(location.state?.openForm));
@@ -29,6 +31,7 @@ export default function Recommend() {
   const analysisPromiseRef = useRef(null);
   const searchBarRef = useRef(null);
   const hasPreviousRecommendation = Boolean(readPersistedRecommendation()?.result);
+  const isLoggedIn = Boolean(accessToken);
 
   const scrollToSearchBar = useCallback(() => {
     const el = searchBarRef.current;
@@ -81,7 +84,13 @@ export default function Recommend() {
   const steps = [
     <StepSavingPlan      data={formData} setData={setFormData} cats={cats} onNext={go(1)} />,
     <StepBasicInfo       data={formData} setData={setFormData} cats={cats} onPrev={go(0)} onNext={go(2)} />,
-    <StepBenefits        data={formData} setData={setFormData} cats={cats} onPrev={go(1)} onNext={go(3)} />,
+    <StepBenefits
+      data={formData}
+      setData={setFormData}
+      cats={cats}
+      onPrev={go(1)}
+      onNext={isLoggedIn ? go(3) : startAnalysis}
+    />,
     <StepPersonalInfo    data={formData} setData={setFormData}             onPrev={go(2)} onNext={go(4)} onSkip={startAnalysis} />,
     <StepRegion          data={formData} setData={setFormData} cats={cats} onPrev={go(3)} onNext={go(5)} onSkip={startAnalysis} />,
     <StepHouseholdIncome data={formData} setData={setFormData} cats={cats} onPrev={go(4)} onNext={go(6)} onSkip={startAnalysis} />,
