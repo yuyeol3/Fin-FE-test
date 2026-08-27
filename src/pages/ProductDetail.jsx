@@ -6,7 +6,7 @@ import {
   findProductViewById,
   getActiveRecommendationResult,
 } from "../utils/recommendationResult";
-import { getProductApplicationBadge, getProductApplicationBadgeVariant, getProductApplyUrl, openProductApplication } from "../utils/productApplyLink";
+import { getProductApplicationBadge, getProductApplicationBadgeVariant, getProductApplyUrl, getProductOfficialChannel, openOfficialChannel, openProductApplication } from "../utils/productApplyLink";
 import applicationFallbackSearchIcon from "../assets/application-fallback/search.svg";
 import applicationFallbackInstitutionIcon from "../assets/application-fallback/institution.svg";
 import applicationFallbackCopyIcon from "../assets/application-fallback/copy.svg";
@@ -291,10 +291,11 @@ function ProductSummary({ product, isBankProduct, isLoggedIn }) {
 function ApplicationFallbackModal({ product, onClose, onOpenInstitutionPage }) {
   const [isCopied, setIsCopied] = useState(false);
   const isGovernmentProduct = getProductApplicationBadgeVariant(product) === "government";
-  const channelLabel = isGovernmentProduct ? "복지로에서 검색하기" : `${product.institution} 홈페이지에서 검색하기`;
+  const officialChannel = getProductOfficialChannel(product);
+  const channelLabel = `${officialChannel.name}에서 검색하기`;
   const institutionDescription = isGovernmentProduct
     ? "담당 기관 ∙ 읍∙면∙동 행정복지센터 / 복지로"
-    : `담당 기관 ∙ ${product.institution}`;
+    : `담당 기관 ∙ ${officialChannel.name}`;
 
   const handleCopy = async () => {
     try {
@@ -330,7 +331,7 @@ function ApplicationFallbackModal({ product, onClose, onOpenInstitutionPage }) {
         <h2 id="application-fallback-title" className="mt-5 text-[26px] font-semibold leading-[1.22] text-[#373737]">기관 공식 채널에서 신청해 주세요</h2>
         <p className="mt-4 text-[18px] leading-[1.44] text-[#6B7571]">직접 연결 링크가 확인되지 않아<br />담당 기관 안내로 대체해 드려요.</p>
 
-        <div className="mt-10 rounded-[10px] bg-[#F0FFFE] px-[22px] py-[30px] text-left">
+        <div className="mt-8 rounded-[10px] bg-[#F0FFFE] px-[22px] py-[30px] text-left">
           <div className="flex items-end justify-between gap-4 border-b border-[#D0DDDC] pb-[23px]">
             <div>
               <p className="text-[17px] font-medium text-[#6F7975]">상품명</p>
@@ -672,7 +673,7 @@ export default function ProductDetail() {
           product={product}
           onClose={() => setIsApplicationFallbackOpen(false)}
           onOpenInstitutionPage={() => {
-            openProductApplication(product);
+            openOfficialChannel(product);
             setIsApplicationFallbackOpen(false);
           }}
         />
