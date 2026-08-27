@@ -267,19 +267,19 @@ function BankRateSummary({ product, isLoggedIn }) {
 
 function ContributionSummary({ product }) {
   return (
-    <div className="flex min-h-[242px] w-full max-w-[699px] flex-col items-center justify-center rounded-[10px] border border-[#D5D5D5] px-6 py-8 lg:px-[32px] lg:py-[36px]">
+    <div className="flex h-[238px] w-full max-w-[620px] flex-col items-center justify-center rounded-[10px] border border-[#D5D5D5] px-6 py-8 lg:px-[28px] lg:py-[32px]">
       <div className="grid w-full grid-cols-1 items-center justify-items-center gap-7 md:grid-cols-[1fr_1px_1fr] md:gap-0">
         <div className="w-fit max-w-full text-left">
-          <p className="whitespace-nowrap text-[24.7px] font-medium leading-[1.2] text-[#454545]">기여금 환산 수익률</p>
-          <p className="mt-[11px] whitespace-nowrap text-[49.4px] font-bold leading-[1.2] text-[#454545]">{product.contributionRate}</p>
+          <p className="whitespace-nowrap text-[21px] font-medium leading-[1.2] text-[#454545]">기여금 환산 수익률</p>
+          <p className="mt-[8px] whitespace-nowrap text-[42px] font-bold leading-[1.2] text-[#454545]">{product.contributionRate}</p>
         </div>
-        <div className="hidden h-[108px] w-px bg-[#D5D5D5] md:block" />
+        <div className="hidden h-[121px] w-px bg-[#D5D5D5] md:block" />
         <div className="w-fit max-w-full text-left">
-          <p className="whitespace-nowrap text-[24.7px] font-medium leading-[1.2] text-[#454545]">예상 만기 기여금 총액</p>
-          <p className="mt-[11px] whitespace-nowrap text-[49.4px] font-bold leading-[1.2] text-[#03BFA5]">{product.maturityContribution}</p>
+          <p className="whitespace-nowrap text-[21px] font-medium leading-[1.2] text-[#454545]">예상 만기 기여금 총액</p>
+          <p className="mt-[8px] whitespace-nowrap text-[42px] font-bold leading-[1.2] text-[#03BFA5]">{product.maturityContribution}</p>
         </div>
       </div>
-      <p className="mt-[22px] w-full text-center text-[23.1px] font-medium leading-[1.2] text-[#606060]">{product.contributionCaption}</p>
+      <p className="mt-[16px] w-full text-center text-[18px] font-medium leading-[1.3] text-[#606060]">{product.contributionCaption}</p>
     </div>
   );
 }
@@ -439,12 +439,12 @@ function RightPanel({ product, onEditRate, onApply, onFavorite, isLoggedIn, isFa
         )}
 
         {!isBankProduct && (
-          <div className="mt-[32px] flex flex-col">
-            <div className="flex items-center gap-[10px] text-black">
-              <CalendarIcon className="size-[30px]" />
-              <h2 className="text-[26px] font-medium leading-[1.2]">모집 기간</h2>
+          <div className="mt-[24px] flex flex-col">
+            <div className="flex items-center gap-[8px] text-[#454545]">
+              <CalendarIcon className="size-[23px]" />
+              <h2 className="text-[20px] font-medium leading-[1.2]">모집 기간</h2>
             </div>
-            <div className="mt-[18px] flex h-[80px] items-center justify-center rounded-[10px] border-2 border-[#03BFA5] bg-[#F7FFFE] px-[34px] text-center text-[30px] font-medium leading-[1.2] text-[#03BFA5]">
+            <div className="mt-[12px] flex h-[64px] items-center justify-center rounded-[10px] border-2 border-[#03BFA5] bg-[#F7FFFE] px-[24px] text-center text-[22px] font-medium leading-[1.2] text-[#03BFA5]">
               {product.recruitPeriod}
             </div>
           </div>
